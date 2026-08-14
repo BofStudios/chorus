@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <header>
+      <div class="mark"></div>
+      <div class="head-text">
+        <div class="name">Chorus</div>
+        <div class="status" id="status"><span class="dot"></span>checking…</div>
+      </div>
+    </header>
+
+    <!-- App is running and paired -->
+    <section id="ready" hidden>
+      <div class="count" id="count"></div>
+      <p class="hint">
+        Browse GitHub. On any profile or repository, press <b>Send to Chorus</b> in the corner to add
+        that developer to your watchlist.
+      </p>
+      <button id="openApp">Open Chorus</button>
+      <div class="recent" id="recent"></div>
+      <button class="ghost" id="unpair">Unpair</button>
+    </section>
+
+    <!-- App is running but no token yet -->
+    <section id="pair" hidden>
+      <p class="hint">
+        Chorus is running. Open <b>Settings → Extension</b>, copy the pairing code, and paste it
+        below.
+      </p>
+      <input type="text" id="token" placeholder="pairing code" spellcheck="false" />
+      <button id="pairBtn">Pair</button>
+      <div class="err" id="pairErr"></div>
+    </section>
+
+    <!-- App not detected -->
+    <section id="install" hidden>
+      <p class="hint">
+        The Chorus desktop app is not running. It does the research and holds your watchlist — this
+        extension only feeds it.
+      </p>
+      <button id="launch">Try to open it</button>
+      <button class="ghost" id="download">Download for Windows</button>
+      <a class="link" id="repo" href="#">View the source on GitHub</a>
+    </section>
+
+    <footer>Nothing is sent or automated. You click, it queues.</footer>
+
+    <script src="popup.js"></script>
+  </body>
+</html>

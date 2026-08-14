@@ -1,0 +1,19 @@
+node_modules/
+dist/
+dist-extension/
+out/
+build/icon-cache/
+
+npm-debug.log*
+yarn-error.log*
+*.tsbuildinfo
+
+# Local runtime data — never commit; secrets.bin holds encrypted API keys.
+config.json
+secrets.bin
+data.json
+
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

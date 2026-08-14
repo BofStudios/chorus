@@ -1,0 +1,72 @@
+{
+  "name": "chorus",
+  "productName": "Chorus",
+  "version": "0.1.0",
+  "description": "Research assistant for open-source outreach. Finds the developers who would genuinely care about your project, explains why, and drafts a personal message. You send it.",
+  "main": "src/main/index.js",
+  "author": "BofStudios",
+  "license": "MIT",
+  "homepage": "https://github.com/BofStudios/chorus",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/BofStudios/chorus.git"
+  },
+  "keywords": [
+    "open-source",
+    "developer-outreach",
+    "github-api",
+    "electron",
+    "research",
+    "ai"
+  ],
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron . --dev",
+    "test:sources": "node scripts/smoke-test.js",
+    "test:bridge": "node scripts/bridge-test.js",
+    "pack:extension": "node scripts/pack-extension.js",
+    "dist": "electron-builder --win",
+    "dist:portable": "electron-builder --win portable"
+  },
+  "devDependencies": {
+    "electron": "^33.2.1",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "studio.bof.chorus",
+    "productName": "Chorus",
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "files": [
+      "src/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "extension",
+        "to": "extension",
+        "filter": ["**/*"]
+      }
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": ["x64"]
+        },
+        {
+          "target": "portable",
+          "arch": ["x64"]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "shortcutName": "Chorus"
+    }
+  }
+}

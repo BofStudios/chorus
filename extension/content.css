@@ -1,0 +1,45 @@
+.chorus-btn {
+  position: fixed;
+  right: 20px;
+  bottom: 20px;
+  z-index: 2147483000;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  border: 1px solid #2c3747;
+  border-radius: 9px;
+  background: #121722;
+  color: #e4eaf2;
+  font: 600 13px/1 "Segoe UI", system-ui, sans-serif;
+  cursor: pointer;
+  box-shadow: 0 6px 22px rgba(0, 0, 0, 0.45);
+  transition: transform 0.12s, border-color 0.12s;
+}
+
+.chorus-btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+  border-color: #5b9dff;
+}
+
+.chorus-btn:disabled {
+  opacity: 0.7;
+  cursor: default;
+}
+
+.chorus-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: linear-gradient(140deg, #5b9dff, #a06bff);
+}
+
+.chorus-btn.chorus-ok {
+  border-color: #1e4030;
+  color: #4ade80;
+}
+
+.chorus-btn.chorus-err {
+  border-color: #4a2626;
+  color: #f87171;
+}
