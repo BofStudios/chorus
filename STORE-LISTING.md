@@ -138,17 +138,19 @@ https://github.com/BofStudios/chorus/issues
 
 ---
 
-## Graphics you still need to make
+## Graphics
 
-| Asset | Size | Required? | Notes |
+| Asset | Size | Required? | Status |
 |---|---|---|---|
-| Store icon | 128×128 | Yes | Already generated: `extension/icons/icon128.png` |
-| Screenshot | 1280×800 or 640×400 | Yes, at least 1 | Take a shot of the popup over a GitHub page |
-| Small promo tile | 440×280 | Optional | Only needed for featuring |
-| Marquee promo tile | 1400×560 | Optional | Only needed for featuring |
+| Store icon | 128×128 | Yes | Ready — `extension/icons/icon128.png` |
+| Screenshot | 1280×800 | Yes, at least 1 | Ready — `docs/store/screenshot-1280x800.png` |
+| Small promo tile | 440×280 | Optional | Not made — only needed to be featured |
+| Marquee promo tile | 1400×560 | Optional | Not made — only needed to be featured |
 
-The fastest screenshot: open a GitHub profile, click the extension, and capture the
-window at 1280×800.
+Both required graphics are in the repo, so the submission needs no design work.
+The screenshot shows the real popup and the real in-page button over a stand-in
+profile; the person and repositories in it are invented so the listing does not
+imply anyone endorses the extension.
 
 ---
 
