@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="build/logo.svg" width="96" alt="Chorus" />
+<img src="build/icon.png" width="96" alt="Chorus" />
 
 # Chorus
 
