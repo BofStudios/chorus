@@ -1,6 +1,18 @@
+<div align="center">
+
+<img src="build/logo.svg" width="96" alt="Chorus" />
+
 # Chorus
 
 **Find the developers who would genuinely care about your open-source project — and know why before you write to them.**
+
+[![Download](https://img.shields.io/github/v/release/BofStudios/chorus?label=download&style=flat-square&color=6690ff)](https://github.com/BofStudios/chorus/releases/latest)
+[![License](https://img.shields.io/badge/license-MIT-blue?style=flat-square&color=9b6bff)](LICENSE)
+![Platform](https://img.shields.io/badge/platform-Windows-lightgrey?style=flat-square)
+
+</div>
+
+<br>
 
 Chorus is a desktop app for maintainers who have built something good and have no idea how to tell anyone about it. It reads your repository, works out who it is actually for, finds those people through their public work, explains the connection, and drafts a message for each one.
 
@@ -98,6 +110,10 @@ The design assumption is that twenty messages a human wrote and sent beat two th
 <br>
 
 ## Install
+
+**Just want to use it?** Grab the [latest release](https://github.com/BofStudios/chorus/releases/latest) — take the installer, or the portable build if you would rather not install anything. Windows will warn about an unknown publisher because the binaries are unsigned; choose **More info → Run anyway**.
+
+**Building it yourself:**
 
 ```bash
 git clone https://github.com/BofStudios/chorus.git
