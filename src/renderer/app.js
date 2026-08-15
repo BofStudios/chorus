@@ -47,6 +47,8 @@ const state = {
   progress: null,
   logLines: [],
   watchlist: [],
+  findings: [],
+  openCard: null,
   assessed: {},
   wizardStep: 0
 };
@@ -522,103 +524,200 @@ async function startResearch(getConfig) {
   state.running = true;
   state.logLines = [];
   state.progress = null;
+  state.findings = [];
+  state.openCard = null;
   setView('targets');
 }
 
 // --- view: live research --------------------------------------------------
 
+// Where each card sits on the canvas, as percentages. Hand-placed rather than
+// evenly spaced on a circle — a perfect ring reads as a diagram, a slightly
+// irregular constellation reads as a workspace.
+const CARD_SPOTS = {
+  overview: { x: 50, y: 9 },
+  audience: { x: 28, y: 15 },
+  neighbours: { x: 13, y: 33 },
+  builders: { x: 11, y: 57 },
+  problems: { x: 19, y: 80 },
+  profiles: { x: 41, y: 91 },
+  discussions: { x: 63, y: 91 },
+  people: { x: 82, y: 77 },
+  scoring: { x: 87, y: 52 },
+  channels: { x: 84, y: 28 },
+  drafts: { x: 71, y: 12 }
+};
+
 function viewRunning() {
   const progress = state.progress;
-  const overall = progress?.overall ?? 0;
-  const counters = progress?.counters || {};
+  const repo = state.settings?.config.project.repo || '';
 
   content.innerHTML = `
-    <div class="view">
-      <h1>Researching ${esc(state.settings?.config.project.repo || '')}</h1>
-
-      <div class="card progress-card">
-        <div class="progress-top">
-          <div class="progress-stage" id="pStage">${esc(progress?.stage?.label || 'Starting…')}</div>
-          <div class="progress-pct" id="pPct">${overall}%</div>
+    <div class="graph-view">
+      <div class="graph-stage" id="graphStage">
+        <svg class="graph-links" id="graphLinks" aria-hidden="true"></svg>
+        <div class="graph-core" id="graphCore">
+          <span class="core-glyph"></span>
+          <span class="core-name">${esc(repo || 'your project')}</span>
+          <span class="core-spin"></span>
         </div>
-        <div class="progress"><div id="pBar"></div></div>
-        <div class="progress-meta" id="pMeta">
-          ${duration(progress?.elapsedMs)} elapsed${progress?.etaMs ? ` · about ${duration(progress.etaMs)} left` : ''}
-        </div>
-
-        <div class="stage-list" id="pStages">${renderStages(progress?.stages)}</div>
-
-        <div class="counters" id="pCounters">${renderCounters(counters)}</div>
+        <div class="graph-cards" id="graphCards"></div>
       </div>
 
-      <div class="log" id="log"></div>
+      <div class="graph-foot">
+        <div class="graph-note" id="graphNote">Starting the research…</div>
+        <div class="graph-bar-row">
+          <span class="graph-bar-label">Research in progress</span>
+          <div class="graph-bar"><div id="graphBar"></div></div>
+          <span class="graph-time" id="graphTime"></span>
+          <button class="btn ghost small" id="cancel">Cancel</button>
+        </div>
+      </div>
 
-      <div class="btn-row mt-16">
-        <button class="btn ghost" id="cancel">Cancel run</button>
+      <div class="graph-drawer" id="graphDrawer" hidden>
+        <div class="drawer-head">
+          <div>
+            <div class="drawer-title" id="drawerTitle"></div>
+            <div class="drawer-sub" id="drawerSub"></div>
+          </div>
+          <button class="drawer-close" id="drawerClose" aria-label="Close">×</button>
+        </div>
+        <div class="drawer-body" id="drawerBody"></div>
       </div>
     </div>
   `;
 
-  // Width is set here rather than in the markup — the CSP blocks style attributes.
-  document.getElementById('pBar').style.width = `${overall}%`;
+  buildGraph(progress?.cards || []);
+  if (progress) updateRunning(progress);
+
   document.getElementById('cancel').addEventListener('click', () => call(api.research.cancel()));
-  paintLog();
+  document.getElementById('drawerClose').addEventListener('click', closeDrawer);
 }
 
-function renderStages(stages) {
-  if (!stages) return '';
-  return stages
-    .map(
-      (stage) => `
-    <div class="stage ${esc(stage.state)}">
-      <span class="stage-icon"></span>
-      <span class="stage-label">${esc(stage.label)}</span>
-    </div>`
-    )
-    .join('');
-}
+function buildGraph(cards) {
+  const host = document.getElementById('graphCards');
+  const links = document.getElementById('graphLinks');
+  if (!host || !links) return;
 
-function renderCounters(counters) {
-  const items = [
-    ['discovered', 'found'],
-    ['profiled', 'profiled'],
-    ['assessed', 'assessed'],
-    ['kept', 'worth writing to']
-  ];
-  return items
-    .map(
-      ([key, label]) => `
-    <div class="counter"><b>${counters[key] ?? 0}</b><span>${label}</span></div>`
-    )
-    .join('');
-}
+  host.textContent = '';
+  links.textContent = '';
+  links.setAttribute('viewBox', '0 0 100 100');
+  links.setAttribute('preserveAspectRatio', 'none');
 
-function paintLog() {
-  const log = document.getElementById('log');
-  if (!log) return;
-  log.innerHTML = state.logLines
-    .map(
-      (line) =>
-        `<div class="log-line ${esc(line.level || '')}">
-          <span class="phase">${esc(line.stage || '')}</span><span>${esc(line.message)}</span>
-        </div>`
-    )
-    .join('');
-  log.scrollTop = log.scrollHeight;
+  cards.forEach((card, index) => {
+    const spot = CARD_SPOTS[card.id] || { x: 50, y: 50 };
+
+    // A faint line from the centre out to each card.
+    const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+    line.setAttribute('x1', '50');
+    line.setAttribute('y1', '50');
+    line.setAttribute('x2', String(spot.x));
+    line.setAttribute('y2', String(spot.y));
+    line.setAttribute('class', 'graph-link');
+    line.dataset.card = card.id;
+    line.style.animationDelay = `${index * 60}ms`;
+    links.appendChild(line);
+
+    const el = document.createElement('button');
+    el.className = 'gcard';
+    el.dataset.card = card.id;
+    el.style.left = `${spot.x}%`;
+    el.style.top = `${spot.y}%`;
+    el.style.animationDelay = `${index * 55}ms`;
+    el.innerHTML = `
+      <span class="gcard-top">
+        <span class="gcard-title">${esc(card.title)}</span>
+        <span class="gcard-badge" data-badge></span>
+      </span>
+      <span class="gcard-blurb">${esc(card.blurb)}</span>
+      <span class="gcard-status" data-status>Waiting</span>`;
+    el.addEventListener('click', () => openDrawer(card.id));
+    host.appendChild(el);
+  });
 }
 
 function updateRunning(payload) {
-  const bar = document.getElementById('pBar');
-  if (!bar) return;
-  bar.style.width = `${payload.overall}%`;
-  document.getElementById('pPct').textContent = `${payload.overall}%`;
-  document.getElementById('pStage').textContent = payload.stage?.label || '';
-  document.getElementById('pMeta').textContent =
-    `${duration(payload.elapsedMs)} elapsed${payload.etaMs ? ` · about ${duration(payload.etaMs)} left` : ''}`;
-  document.getElementById('pStages').innerHTML = renderStages(payload.stages);
-  document.getElementById('pCounters').innerHTML = renderCounters(payload.counters || {});
-  paintLog();
+  const host = document.getElementById('graphCards');
+  if (!host) return;
+
+  if (payload.cards?.length && host.children.length !== payload.cards.length) {
+    buildGraph(payload.cards);
+  }
+
+  for (const card of payload.cards || []) {
+    const el = host.querySelector(`.gcard[data-card="${card.id}"]`);
+    if (!el) continue;
+    el.classList.toggle('is-active', card.state === 'active');
+    el.classList.toggle('is-done', card.state === 'done');
+    el.classList.toggle('is-empty', card.state === 'empty');
+
+    const badge = el.querySelector('[data-badge]');
+    badge.textContent = card.count > 0 ? card.count : '';
+    badge.classList.toggle('on', card.count > 0);
+
+    const status = el.querySelector('[data-status]');
+    if (card.state === 'active') status.textContent = 'Researching…';
+    else if (card.count > 0) status.textContent = `${card.count} finding${card.count === 1 ? '' : 's'} · open`;
+    else if (card.state === 'empty') status.textContent = 'Nothing found';
+    else if (card.state === 'done') status.textContent = 'Done';
+    else status.textContent = 'Waiting';
+
+    const link = document.querySelector(`.graph-link[data-card="${card.id}"]`);
+    if (link) {
+      link.classList.toggle('lit', card.state === 'active' || card.count > 0);
+      link.classList.toggle('pulsing', card.state === 'active');
+    }
+  }
+
+  document.getElementById('graphBar').style.width = `${payload.overall ?? 0}%`;
+  document.getElementById('graphTime').textContent =
+    `${duration(payload.elapsedMs)}${payload.etaMs ? ` · ~${duration(payload.etaMs)} left` : ''}`;
+
+  const count = payload.findingCount ?? state.findings.length;
+  document.getElementById('graphNote').textContent = count
+    ? `${count} finding${count === 1 ? '' : 's'} so far. Open any card to explore it while the research runs.`
+    : payload.message || 'Starting the research…';
+
+  document.getElementById('graphCore').classList.toggle('done', payload.type !== 'progress');
+
+  if (state.openCard) paintDrawer(state.openCard);
 }
+
+function openDrawer(cardId) {
+  state.openCard = cardId;
+  const drawer = document.getElementById('graphDrawer');
+  if (drawer) drawer.hidden = false;
+  paintDrawer(cardId);
+}
+
+function closeDrawer() {
+  state.openCard = null;
+  const drawer = document.getElementById('graphDrawer');
+  if (drawer) drawer.hidden = true;
+}
+
+function paintDrawer(cardId) {
+  const card = (state.progress?.cards || []).find((c) => c.id === cardId);
+  if (!card) return;
+  const rows = state.findings.filter((f) => f.cardId === cardId);
+
+  document.getElementById('drawerTitle').textContent = card.title;
+  document.getElementById('drawerSub').textContent = card.blurb;
+  document.getElementById('drawerBody').innerHTML = rows.length
+    ? rows
+        .map(
+          (row) => `
+      <div class="drawer-row">
+        <div class="drawer-row-text">${esc(row.text)}</div>
+        ${row.detail ? `<div class="drawer-row-detail">${esc(row.detail)}</div>` : ''}
+      </div>`
+        )
+        .join('')
+    : `<div class="drawer-empty">${
+        card.state === 'active' ? 'Working on this now…' : 'Nothing here yet.'
+      }</div>`;
+}
+
 
 // --- view: results --------------------------------------------------------
 
@@ -1233,9 +1332,22 @@ api.research.onProgress(async (payload) => {
     if (state.logLines.length > 300) state.logLines.shift();
   }
 
+  if (payload.finding) {
+    state.findings.push(payload.finding);
+    if (state.findings.length > 400) state.findings.shift();
+  }
+
   if (payload.type === 'progress') {
     state.progress = payload;
-    if (state.view === 'targets' && state.running) updateRunning(payload);
+    if (state.view === 'targets' && state.running) {
+      // This handler is async, so a throw in here would become a silent
+      // unhandled rejection and the graph would just stop updating.
+      try {
+        updateRunning(payload);
+      } catch (error) {
+        console.error('graph update failed:', error);
+      }
+    }
     return;
   }
 

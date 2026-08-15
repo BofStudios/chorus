@@ -8,7 +8,7 @@
 
 [![Download](https://img.shields.io/github/v/release/BofStudios/chorus?label=download&style=flat-square&color=6690ff)](https://github.com/BofStudios/chorus/releases/latest)
 [![License](https://img.shields.io/badge/license-MIT-blue?style=flat-square&color=9b6bff)](LICENSE)
-![Platform](https://img.shields.io/badge/platform-Windows-lightgrey?style=flat-square)
+![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS-lightgrey?style=flat-square)
 
 </div>
 
@@ -20,11 +20,11 @@ Then it stops. You read the drafts, edit them, and send them yourself.
 
 <br>
 
-![Research in progress](docs/screenshots/1-research-progress.png)
+![The research graph](docs/screenshots/1-research-graph.png)
 
 <br>
 
-![Results](docs/screenshots/2-results.png)
+![Opening a card while the research runs](docs/screenshots/2-graph-findings.png)
 
 <br>
 
@@ -42,20 +42,26 @@ Then it stops. You read the drafts, edit them, and send them yourself.
 
 It also surfaces the Hacker News threads where your problem space is already being discussed — usually more valuable than any individual message.
 
-A run reports itself properly while it works: overall percentage, the seven stages ticking off one by one, live counters, and a real estimate of the time left.
+A run is not a spinner. Chorus lays the work out as a graph: every card is a real
+stage of the pipeline, it lights up when that stage starts, and it fills with the
+things actually found. Open any card mid-run to read what it has so far — the
+research keeps going while you read.
 
-```
-Profiling candidates                                    47%
-████████████████████░░░░░░░░░░░░░░░░░░░░░░░
-3m 14s elapsed · about 3m 38s left
+| Card | What lands in it |
+|---|---|
+| **Project overview** | Language, stars, topics, description |
+| **Your audience** | Who benefits, and who the model ruled out |
+| **Neighbouring projects** | Repositories sitting next to yours |
+| **Who builds there** | Contributors to those projects |
+| **Problem reports** | People who opened issues about this exact problem |
+| **Matching profiles** | Bios naming what you built |
+| **Where it is discussed** | Hacker News threads you belong in |
+| **Candidate profiles** | Recent work, activity, reachability |
+| **Match scoring** | Each score with the reasoning behind it |
+| **Where to reach them** | The channel that fits each person |
+| **Your drafts** | One message per person |
 
-✓ Reading repository          ✓ Finding discussions
-✓ Understanding the audience  ◐ Profiling candidates
-✓ Searching for people        ○ Assessing each match
-                              ○ Writing drafts
-
-214 found   63 profiled   0 assessed   0 worth writing to
-```
+A card that finds nothing stays empty and says so. Nothing is padded to look busy.
 
 <br>
 
@@ -82,7 +88,10 @@ It is deliberately dumb: it reads the page you are already looking at, and only 
 
 The popup knows the state of your setup: if the desktop app is running it shows your watchlist count and can bring the window to the front over a `chorus://` handler the app registers. If the app is not running, it offers the download instead.
 
-![Navigation](docs/screenshots/3-navigation.png)
+It is a standard Manifest V3 extension using only `chrome.storage`, `chrome.runtime`
+and `chrome.tabs`, so it loads unchanged in **Chrome, Edge, Brave, Vivaldi and
+Opera / Opera GX** — the load-unpacked page is at `chrome://extensions` in all of
+them (`opera://extensions` in Opera).
 
 **Install it:**
 
@@ -126,6 +135,13 @@ Build a Windows installer and portable `.exe`:
 
 ```bash
 npm run dist
+```
+
+Build for macOS (a `.dmg` and a `.zip`, Apple Silicon and Intel) — run this on a Mac,
+electron-builder cannot cross-compile it from Windows:
+
+```bash
+npm run dist:mac
 ```
 
 Output lands in `dist/`.

@@ -278,6 +278,7 @@ nav {
 /* ============================ content ============================ */
 
 .content {
+  position: relative;
   flex: 1;
   overflow-y: auto;
   padding: 44px 48px 80px;
@@ -1340,4 +1341,362 @@ a.thread:hover {
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
   }
+}
+
+/* ---------- research graph ----------
+   A constellation of cards around the project. Each card is a real stage of the
+   pipeline; it lights up when that work starts and carries its findings. */
+
+.graph-view {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 20px 26px 18px;
+  animation: fade 0.35s var(--ease-out);
+}
+
+@keyframes fade {
+  from { opacity: 0; }
+}
+
+.graph-stage {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+}
+
+.graph-links {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.graph-link {
+  stroke: var(--line-strong);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+  opacity: 0;
+  animation: linkIn 0.7s var(--ease-out) forwards;
+  transition: stroke 0.4s var(--ease), opacity 0.4s var(--ease);
+}
+
+@keyframes linkIn {
+  to { opacity: 1; }
+}
+
+.graph-link.lit {
+  stroke: var(--accent-line);
+}
+
+.graph-link.pulsing {
+  animation: linkPulse 1.9s ease-in-out infinite;
+}
+
+@keyframes linkPulse {
+  0%, 100% { opacity: 0.35; }
+  50% { opacity: 1; }
+}
+
+.graph-core {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 18px;
+  border-radius: 999px;
+  background: var(--bg-panel);
+  border: 1px solid var(--line-strong);
+  box-shadow: 0 14px 40px rgba(0, 0, 0, 0.5), 0 0 0 6px rgba(102, 144, 255, 0.05);
+  z-index: 3;
+  animation: coreIn 0.5s var(--ease-out);
+}
+
+@keyframes coreIn {
+  from { opacity: 0; transform: translate(-50%, -50%) scale(0.9); }
+}
+
+.core-glyph {
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+  background: linear-gradient(140deg, var(--accent), var(--accent-2));
+  flex: none;
+}
+
+.core-name {
+  font-weight: 620;
+  font-size: 13.5px;
+  letter-spacing: -0.2px;
+  max-width: 260px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.core-spin {
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  border: 1.6px solid var(--line-bright);
+  border-top-color: var(--accent);
+  animation: spin 0.9s linear infinite;
+  flex: none;
+}
+
+.graph-core.done .core-spin {
+  border: 1.6px solid var(--good);
+  animation: none;
+}
+
+.gcard {
+  position: absolute;
+  max-width: calc(50vw - 40px);
+  transform: translate(-50%, -50%);
+  width: 210px;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 12px 13px;
+  border-radius: var(--r-md);
+  background: var(--bg-panel);
+  border: 1px solid var(--line);
+  color: inherit;
+  cursor: pointer;
+  opacity: 0;
+  animation: cardIn 0.55s var(--ease-out) forwards;
+  transition: border-color 0.22s var(--ease), box-shadow 0.22s var(--ease),
+    background 0.22s var(--ease);
+  z-index: 2;
+}
+
+@keyframes cardIn {
+  from { opacity: 0; transform: translate(-50%, -46%) scale(0.97); }
+  to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+}
+
+.gcard:hover {
+  border-color: var(--line-bright);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+  z-index: 4;
+}
+
+.gcard.is-active {
+  border-color: var(--accent-line);
+  background: linear-gradient(180deg, rgba(102, 144, 255, 0.07), transparent), var(--bg-panel);
+  box-shadow: 0 0 0 1px var(--accent-line), 0 12px 34px rgba(102, 144, 255, 0.12);
+}
+
+.gcard.is-empty {
+  opacity: 0.5;
+}
+
+.gcard-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.gcard-title {
+  font-size: 13px;
+  font-weight: 620;
+  letter-spacing: -0.1px;
+}
+
+.gcard-badge {
+  min-width: 19px;
+  height: 19px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  background: var(--text);
+  color: var(--bg);
+  flex: none;
+}
+
+.gcard-badge.on {
+  display: flex;
+  animation: pop 0.3s var(--ease-out);
+}
+
+@keyframes pop {
+  from { transform: scale(0.4); opacity: 0; }
+}
+
+.gcard-blurb {
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: var(--text-2);
+}
+
+.gcard-status {
+  font-size: 11px;
+  color: var(--text-3);
+  margin-top: 2px;
+}
+
+.gcard.is-active .gcard-status {
+  color: var(--accent);
+}
+
+/* foot */
+
+.graph-foot {
+  flex: none;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+
+.graph-note {
+  text-align: center;
+  font-size: 12.5px;
+  color: var(--text-3);
+  margin-bottom: 12px;
+}
+
+.graph-bar-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.graph-bar-label {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text-2);
+  flex: none;
+}
+
+.graph-bar {
+  flex: 1;
+  height: 4px;
+  border-radius: 3px;
+  background: var(--line);
+  overflow: hidden;
+}
+
+.graph-bar > div {
+  height: 100%;
+  width: 0;
+  border-radius: 3px;
+  background: linear-gradient(90deg, var(--accent), var(--accent-2));
+  transition: width 0.5s var(--ease-out);
+}
+
+.graph-time {
+  font-size: 12px;
+  color: var(--text-3);
+  font-variant-numeric: tabular-nums;
+  flex: none;
+  min-width: 118px;
+  text-align: right;
+}
+
+/* drawer */
+
+.graph-drawer[hidden] {
+  display: none;
+}
+
+.graph-drawer {
+  position: absolute;
+  top: 18px;
+  right: 18px;
+  bottom: 92px;
+  width: 336px;
+  background: var(--bg-panel-2);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-lg);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.6);
+  display: flex;
+  flex-direction: column;
+  z-index: 6;
+  animation: drawerIn 0.28s var(--ease-out);
+}
+
+@keyframes drawerIn {
+  from { opacity: 0; transform: translateX(14px); }
+}
+
+.drawer-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 16px 16px 12px;
+  border-bottom: 1px solid var(--line);
+}
+
+.drawer-title {
+  font-weight: 640;
+  letter-spacing: -0.2px;
+}
+
+.drawer-sub {
+  font-size: 12px;
+  color: var(--text-3);
+  margin-top: 2px;
+}
+
+.drawer-close {
+  background: none;
+  border: 0;
+  color: var(--text-3);
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 4px;
+}
+
+.drawer-close:hover {
+  color: var(--text);
+}
+
+.drawer-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px 16px 16px;
+}
+
+.drawer-row {
+  padding: 10px 0;
+  border-bottom: 1px solid var(--line);
+  animation: rowIn 0.3s var(--ease-out);
+}
+
+@keyframes rowIn {
+  from { opacity: 0; transform: translateY(4px); }
+}
+
+.drawer-row:last-child {
+  border-bottom: 0;
+}
+
+.drawer-row-text {
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.drawer-row-detail {
+  font-size: 11.5px;
+  color: var(--text-3);
+  margin-top: 3px;
+  line-height: 1.45;
+}
+
+.drawer-empty {
+  color: var(--text-3);
+  font-size: 12.5px;
+  padding: 18px 0;
+  text-align: center;
 }

@@ -60,6 +60,7 @@ async function discover(run, project, progress) {
     checkCancelled(run);
 
     if (task.kind === 'repos') {
+      progress.focus('neighbours');
       const repos = await github.searchRepos(task.query, { limit: 15 }).catch((error) => {
         progress.note(`Repository search failed: ${error.message}`, 'warn');
         return [];
@@ -75,10 +76,14 @@ async function discover(run, project, progress) {
           });
         }
       }
+      for (const repo of repos.slice(0, 4)) {
+        progress.finding('neighbours', `${repo.fullName} — ${repo.stars}★`, repo.description);
+      }
       advance(`Found ${repos.length} repositories for “${task.query}”`);
     }
 
     if (task.kind === 'issues') {
+      progress.focus('problems');
       const authors = await github.searchIssueAuthors(task.query, { limit: 30 }).catch(() => []);
       for (const author of authors) {
         addEvidence(pool, author.login, {
@@ -87,10 +92,14 @@ async function discover(run, project, progress) {
           url: author.evidence.url
         });
       }
+      for (const author of authors.slice(0, 4)) {
+        progress.finding('problems', `@${author.login}`, author.evidence.label);
+      }
       advance(`${authors.length} people opened issues matching “${task.query}”`);
     }
 
     if (task.kind === 'users') {
+      progress.focus('profiles');
       const query = `${task.query} in:bio ${project.repo.language ? `language:${project.repo.language}` : ''} followers:>20`.trim();
       const users = await github.searchUsers(query, { limit: 25 }).catch(() => []);
       for (const user of users) {
@@ -100,6 +109,7 @@ async function discover(run, project, progress) {
           url: `https://github.com/${user.login}`
         });
       }
+      if (users.length) progress.finding('profiles', `${users.length} bios mention “${task.query}”`);
       advance(`${users.length} profiles mention “${task.query}”`);
     }
 
@@ -114,6 +124,7 @@ async function discover(run, project, progress) {
       .filter((repo) => repo.stars >= 20)
       .slice(0, settings.contributorRepos || 10);
 
+    progress.focus('builders');
     for (const [index, repo] of top.entries()) {
       checkCancelled(run);
       const [owner, name] = repo.fullName.split('/');
@@ -124,6 +135,9 @@ async function discover(run, project, progress) {
           label: `${person.contributions} commits to ${repo.fullName}`,
           url: repo.url
         });
+      }
+      if (people[0]) {
+        progress.finding('builders', `@${people[0].login}`, `${people[0].contributions} commits to ${repo.fullName}`);
       }
       progress.step(
         tasks.length + (index + 1) / top.length,
@@ -190,6 +204,13 @@ async function profile(run, project, pool, progress) {
 
     kept.push({ profile: person, repos, evidence: entry.evidence, lastPush });
     progress.count({ profiled: kept.length });
+    if (kept.length <= 5) {
+      progress.finding(
+        'people',
+        `@${person.login}${person.name ? ` — ${person.name}` : ''}`,
+        person.bio || `${person.followers} followers · ${person.publicRepos} repos`
+      );
+    }
   }
 
   if (filtered) progress.note(`${filtered} filtered out on activity, type or contact rules`);
@@ -220,6 +241,10 @@ async function assess(run, project, candidates, progress) {
     if (scoring.score < (settings.minScore ?? 55)) continue;
     passed.push({ candidate, scoring });
     progress.count({ kept: passed.length });
+    progress.finding('scoring', `@${candidate.profile.login} — ${scoring.score}`, scoring.rationale);
+    if (scoring.channel && scoring.channel !== 'none') {
+      progress.finding('channels', `@${candidate.profile.login} → ${scoring.channel}`, scoring.channelNote);
+    }
   }
 
   return passed;
@@ -273,6 +298,12 @@ async function draft(run, project, passed, progress) {
       status: 'new',
       notes: ''
     });
+
+    progress.finding(
+      'drafts',
+      `@${candidate.profile.login}`,
+      message.text ? `${message.text.slice(0, 90)}…` : 'draft ready'
+    );
   }
 
   return targets.sort((a, b) => b.score - a.score);
@@ -297,15 +328,24 @@ async function start({ repo, pitch, audience }, emit) {
   (async () => {
     try {
       progress.begin('repo', `Reading ${parsed.owner}/${parsed.repo}`);
+      progress.focus('overview');
       const info = await github.repoInfo(parsed.owner, parsed.repo);
       progress.step(1, 2, `${info.fullName} — ${info.stars}★, ${info.language || 'no language set'}`);
+      progress.finding('overview', `${info.fullName} — ${info.language || 'no language'}, ${info.stars}★`);
+      if (info.description) progress.finding('overview', info.description);
+      for (const topic of (info.topics || []).slice(0, 4)) progress.finding('overview', `topic: ${topic}`);
       const readmeText = await github.readme(parsed.owner, parsed.repo);
       progress.step(2, 2, readmeText ? `README read (${readmeText.length} chars)` : 'No README found');
 
       progress.begin('analyse', 'Working out who this project is actually for');
+      progress.focus('audience');
       const project = { repo: info, readme: readmeText, pitch, audience, settings };
       project.analysis = await ai.analyseProject(project);
       progress.step(1, 1, `Audience: ${(project.analysis.whoCares || []).slice(0, 3).join(' · ')}`);
+      for (const who of (project.analysis.whoCares || []).slice(0, 5)) progress.finding('audience', who);
+      for (const not of (project.analysis.notFor || []).slice(0, 3)) {
+        progress.finding('audience', `not for: ${not}`);
+      }
       db.updateCampaign(campaign.id, { analysis: project.analysis, repoInfo: info });
 
       progress.begin('discover', 'Searching GitHub for people in this space');
@@ -314,15 +354,20 @@ async function start({ repo, pitch, audience }, emit) {
       db.updateCampaign(campaign.id, { neighbourRepos: neighbourRepos.slice(0, 25) });
 
       progress.begin('discussions', 'Looking for where this is already discussed');
+      progress.focus('discussions');
       let discussions = [];
       if (settings.sources?.hackernews !== false) {
         const queries = (project.analysis.hnQueries || project.analysis.keywords || []).slice(0, 3);
         discussions = queries.length ? await hn.relevantThreads(queries, { limit: 10 }).catch(() => []) : [];
         db.updateCampaign(campaign.id, { discussions });
       }
+      for (const thread of discussions.slice(0, 4)) {
+        progress.finding('discussions', thread.title, `${thread.points} points · ${thread.comments} comments`);
+      }
       progress.step(1, 1, `${discussions.length} related discussions found`);
 
       progress.begin('profile', 'Reading public profiles and recent work');
+      progress.focus('people');
       const candidates = await profile(run, project, pool, progress);
       progress.note(`${candidates.length} passed the activity and profile filters`);
 
