@@ -1,0 +1,29 @@
+<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="plate" x1="76" y1="60" x2="436" y2="452" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#1b2030" />
+      <stop offset="1" stop-color="#0a0c12" />
+    </linearGradient>
+    <linearGradient id="voices" x1="140" y1="360" x2="372" y2="152" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#5b86ff" />
+      <stop offset="0.55" stop-color="#7d84ff" />
+      <stop offset="1" stop-color="#a86bff" />
+    </linearGradient>
+    <linearGradient id="rim" x1="256" y1="40" x2="256" y2="472" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.16" />
+      <stop offset="0.5" stop-color="#ffffff" stop-opacity="0.04" />
+      <stop offset="1" stop-color="#ffffff" stop-opacity="0" />
+    </linearGradient>
+  </defs>
+
+  <!-- plate -->
+  <rect x="40" y="40" width="432" height="432" rx="116" fill="url(#plate)" />
+  <rect x="40.5" y="40.5" width="431" height="431" rx="115.5" stroke="url(#rim)" stroke-width="3" />
+
+  <!-- three voices, rising — a chorus is several lines held together -->
+  <g fill="url(#voices)">
+    <rect x="140" y="168" width="56" height="176" rx="28" />
+    <rect x="228" y="108" width="56" height="296" rx="28" />
+    <rect x="316" y="140" width="56" height="232" rx="28" />
+  </g>
+</svg>

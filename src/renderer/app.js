@@ -685,16 +685,22 @@ function renderDiscussions(campaign) {
       <div class="body-text mb-10">
         Reading these before writing to anyone is usually worth more than the messages themselves.
       </div>
-      ${campaign.discussions
-        .slice(0, 6)
-        .map(
-          (thread) => `
-        <div class="evidence mb-6">
-          <a href="${esc(thread.url)}" data-external>${esc(thread.title)}</a>
-          <span class="small-text">${thread.points} points · ${thread.comments} comments · ${relative(thread.createdAt)}</span>
-        </div>`
-        )
-        .join('')}
+      <div class="thread-list">
+        ${campaign.discussions
+          .slice(0, 6)
+          .map(
+            (thread) => `
+          <a class="thread" href="${esc(thread.url)}" data-external>
+            <span class="thread-score">${thread.points}</span>
+            <span class="thread-body">
+              <span class="thread-title">${esc(thread.title)}</span>
+              <span class="thread-meta">${thread.comments} comments · ${relative(thread.createdAt)}</span>
+            </span>
+            <span class="thread-go">↗</span>
+          </a>`
+          )
+          .join('')}
+      </div>
     </div>`;
 }
 

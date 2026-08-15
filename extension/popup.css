@@ -23,18 +23,9 @@ header {
   width: 30px;
   height: 30px;
   border-radius: 9px;
-  background: linear-gradient(140deg, #6690ff, #9b6bff);
-  position: relative;
   flex: none;
-  box-shadow: 0 4px 14px rgba(102, 144, 255, 0.25);
-}
-
-.mark::after {
-  content: "";
-  position: absolute;
-  inset: 10px;
-  border-radius: 3px;
-  background: #08090d;
+  display: block;
+  box-shadow: 0 4px 14px rgba(102, 144, 255, 0.2);
 }
 
 .name {
