@@ -27,7 +27,8 @@
     "pack:extension": "node scripts/pack-extension.js",
     "dist": "electron-builder --win",
     "dist:portable": "electron-builder --win portable",
-    "dist:mac": "electron-builder --mac"
+    "dist:mac": "electron-builder --mac",
+    "test:integrations": "node scripts/integration-test.js"
   },
   "devDependencies": {
     "electron": "^33.2.1",

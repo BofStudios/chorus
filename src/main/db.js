@@ -24,7 +24,44 @@ function load() {
   if (!Array.isArray(data.campaigns)) data.campaigns = [];
   if (!data.ledger || typeof data.ledger !== 'object') data.ledger = {};
   if (!Array.isArray(data.watchlist)) data.watchlist = [];
+  migrate(data);
   return data;
+}
+
+// Additive migrations only. Existing research data is never rewritten or
+// dropped — each step just fills in what a newer version expects to find.
+const SCHEMA_VERSION = 2;
+
+function migrate(db) {
+  const from = db.schemaVersion || 1;
+  if (from >= SCHEMA_VERSION) return db;
+
+  // v2 — outreach across connected social accounts.
+  if (from < 2) {
+    if (!Array.isArray(db.connectedAccounts)) db.connectedAccounts = [];
+    if (!Array.isArray(db.prospects)) db.prospects = [];
+    if (!Array.isArray(db.outreachCampaigns)) db.outreachCampaigns = [];
+    if (!Array.isArray(db.messages)) db.messages = [];
+    if (!Array.isArray(db.messageAttempts)) db.messageAttempts = [];
+    if (!Array.isArray(db.auditLog)) db.auditLog = [];
+    // One stable local identity, so every connected account has an owner to
+    // check against even though this build has a single user.
+    if (!db.ownerId) db.ownerId = crypto.randomUUID();
+  }
+
+  db.schemaVersion = SCHEMA_VERSION;
+  if (data) persist();
+  return db;
+}
+
+function ownerId() {
+  return load().ownerId;
+}
+
+function collection(name) {
+  const db = load();
+  if (!Array.isArray(db[name])) db[name] = [];
+  return db[name];
 }
 
 function persist() {
@@ -183,6 +220,10 @@ function removeFromWatchlist(id) {
 }
 
 module.exports = {
+  ownerId,
+  collection,
+  persist,
+  SCHEMA_VERSION,
   watchlist,
   addToWatchlist,
   updateWatchlistItem,

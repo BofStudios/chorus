@@ -2,6 +2,7 @@ const http = require('http');
 const crypto = require('crypto');
 const { getStore } = require('./store');
 const db = require('./db');
+const integrations = require('./integrations');
 
 // Local bridge for the Chrome extension.
 //
@@ -93,6 +94,66 @@ function sanitiseCandidate(payload) {
   };
 }
 
+// Rendered in the user's browser after the provider redirects back. Kept plain
+// and self-closing so nobody is left staring at a blank tab.
+function oauthPage({ ok, title, detail }) {
+  const accent = ok ? '#3ddc91' : '#ff6b6b';
+  return `<!doctype html><html><head><meta charset="utf-8"><title>Chorus</title>
+<style>
+ body{margin:0;height:100vh;display:grid;place-items:center;background:#08090d;color:#eceef2;
+      font:15px/1.6 "Segoe UI",system-ui,sans-serif}
+ .card{max-width:420px;padding:32px;text-align:center}
+ .dot{width:44px;height:44px;border-radius:50%;background:${accent}1f;border:1px solid ${accent};
+      display:grid;place-items:center;margin:0 auto 18px;color:${accent};font-size:22px}
+ h1{font-size:18px;margin:0 0 8px;font-weight:620}
+ p{color:#9aa2b1;margin:0;font-size:13.5px}
+ small{display:block;margin-top:18px;color:#656d7d;font-size:12px}
+</style></head><body><div class="card">
+ <div class="dot">${ok ? '✓' : '!'}</div>
+ <h1>${title}</h1><p>${detail}</p>
+ <small>You can close this tab and return to Chorus.</small>
+</div></body></html>`;
+}
+
+function sendHtml(res, status, html) {
+  res.writeHead(status, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' });
+  res.end(html);
+}
+
+async function handleOAuthCallback(url, res) {
+  const providerId = url.pathname.split('/').filter(Boolean).pop();
+  try {
+    const result = await integrations.completeConnection({
+      providerId,
+      code: url.searchParams.get('code'),
+      state: url.searchParams.get('state'),
+      error: url.searchParams.get('error'),
+      errorDescription: url.searchParams.get('error_description')
+    });
+    onUpdate();
+    return sendHtml(
+      res,
+      200,
+      oauthPage({
+        ok: true,
+        title: `${result.providerLabel} connected`,
+        detail: result.username ? `Signed in as ${result.username}.` : 'The account is now available in Chorus.'
+      })
+    );
+  } catch (error) {
+    onUpdate();
+    return sendHtml(
+      res,
+      400,
+      oauthPage({
+        ok: false,
+        title: 'Could not finish connecting',
+        detail: error.message || 'The authorisation failed.'
+      })
+    );
+  }
+}
+
 async function route(req, res) {
   const url = new URL(req.url, `http://127.0.0.1:${activePort}`);
 
@@ -101,6 +162,13 @@ async function route(req, res) {
   // Unauthenticated: lets the extension detect the app without holding a token.
   if (url.pathname === '/ping') {
     return send(res, 200, { app: 'chorus', ok: true, paired: false });
+  }
+
+  // OAuth redirect target. Cannot carry the pairing token — the provider sends
+  // the user here. It is guarded instead by the single-use `state` value, which
+  // only this process could have generated.
+  if (url.pathname.startsWith('/oauth/callback/')) {
+    return handleOAuthCallback(url, res);
   }
 
   if (!authorised(req)) {
@@ -150,6 +218,8 @@ async function startBridge(notify) {
     try {
       server = await listen(port);
       activePort = port;
+      // OAuth redirect URIs are built from the port we actually bound.
+      integrations.setCallbackPort(port);
       return { port, token: token() };
     } catch (error) {
       if (error.code !== 'EADDRINUSE') throw error;
