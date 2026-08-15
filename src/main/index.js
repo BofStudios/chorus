@@ -35,9 +35,18 @@ function createWindow() {
     minWidth: 1020,
     minHeight: 660,
     show: false,
-    backgroundColor: '#0b0e14',
+    backgroundColor: '#08090d',
     title: 'Chorus',
     autoHideMenuBar: true,
+    // The stock Windows title bar renders light and breaks the dark shell.
+    // Hiding it and painting the overlay ourselves keeps the native minimise /
+    // maximise / close buttons while matching the app's own background.
+    titleBarStyle: 'hidden',
+    titleBarOverlay: {
+      color: '#08090d',
+      symbolColor: '#9aa2b1',
+      height: 36
+    },
     webPreferences: {
       preload: path.join(__dirname, '..', 'preload', 'index.js'),
       contextIsolation: true,

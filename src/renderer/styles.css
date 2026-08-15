@@ -70,6 +70,35 @@ select {
   height: 100vh;
 }
 
+/* ---------- window chrome ----------
+   titleBarStyle:'hidden' removes the light Windows bar but also removes the
+   drag handle, so we paint our own strip and push the shell below it. */
+
+.titlebar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 36px;
+  z-index: 100;
+  background: var(--bg);
+  -webkit-app-region: drag;
+}
+
+.shell {
+  padding-top: 36px;
+}
+
+/* Anything interactive must opt out of dragging. */
+button,
+input,
+textarea,
+select,
+a {
+  -webkit-app-region: no-drag;
+}
+
+
 /* ============================ rail ============================ */
 
 .rail {
@@ -91,7 +120,7 @@ select {
 .rail:hover {
   width: var(--rail-w-open);
   position: absolute;
-  top: 0;
+  top: 36px;
   bottom: 0;
   left: 0;
   box-shadow: 30px 0 80px rgba(0, 0, 0, 0.7);
