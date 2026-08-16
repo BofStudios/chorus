@@ -134,19 +134,6 @@ async function expectError(name, code, fn) {
     instagram.post({ id: 'nope', scopes: ['instagram_business_basic'] }, { imageUrl: 'https://x/y.jpg' })
   );
 
-  console.log('\n--- composio broker ---');
-
-  const composio = registry.require('composio');
-  check('Composio is registered', Boolean(composio));
-  check('Composio needs only an API key', composio.credentials.required.join() === 'COMPOSIO_API_KEY');
-  check(
-    'Composio is honest that capabilities depend on the toolkit',
-    composio.declaredCapabilities().sendMessages.reason.includes('toolkit')
-  );
-  await expectError('Composio without a key fails clearly', CODES.NOT_CONFIGURED, () =>
-    composio.listToolkits()
-  );
-
   console.log('\n--- OAuth state ---');
 
   const notConfigured = registry.require('x');
@@ -242,6 +229,95 @@ async function expectError(name, code, fn) {
   const logText = JSON.stringify(log);
   check('audit log contains no tokens', !logText.includes('mock-token'));
   check('audit log contains no client id', !logText.includes('test-client-id'));
+
+  console.log('\n--- the tool catalogue ---');
+
+  const tools = require('../src/main/integrations/core/tools');
+  const catalogue = tools.catalogue();
+  check('tools are named and typed', catalogue.length >= 10);
+  check('Gmail send is in the catalogue', catalogue.some((tool) => tool.slug === 'GMAIL_SEND_EMAIL'));
+  check('Reddit post is in the catalogue', catalogue.some((tool) => tool.slug === 'REDDIT_SUBMIT_POST'));
+  check(
+    'Instagram publish is in the catalogue',
+    catalogue.some((tool) => tool.slug === 'INSTAGRAM_PUBLISH_MEDIA')
+  );
+  check(
+    'there is no Instagram send-message tool',
+    !catalogue.some((tool) => tool.slug.startsWith('INSTAGRAM_SEND'))
+  );
+  check(
+    'there is no LinkedIn tool at all',
+    !catalogue.some((tool) => tool.provider === 'linkedin')
+  );
+  check('the catalogue exposes no handlers', !JSON.stringify(catalogue).includes('function'));
+
+  console.log('\n--- argument validation ---');
+
+  const gmail = tools.get('GMAIL_SEND_EMAIL');
+  try {
+    tools.validate(gmail, { to: 'not-an-email', subject: 'x', body: 'y' });
+    check('a malformed address is rejected', false);
+  } catch (error) {
+    check('a malformed address is rejected', error.message.includes('email address'));
+  }
+  try {
+    tools.validate(gmail, { to: 'a@b.co', subject: 'x', body: 'y', sneaky: 'extra' });
+    check('an invented parameter is rejected', false);
+  } catch (error) {
+    check('an invented parameter is rejected', error.message.includes('not a parameter'));
+  }
+  try {
+    tools.validate(gmail, { to: 'a@b.co', body: 'y' });
+    check('a missing required field is rejected', false);
+  } catch (error) {
+    check('a missing required field is rejected', error.message.includes('required'));
+  }
+
+  console.log('\n--- the action router ---');
+
+  const router = require('../src/main/integrations/core/router');
+  const mockAccount = registry.require('mock').beginConnection();
+
+  await expectError('an unknown tool is refused', CODES.CAPABILITY_UNSUPPORTED, () =>
+    router.execute('MADE_UP_TOOL', { connectedAccountId: mockAccount.accountId, arguments: {} })
+  );
+  // Re-home the record so it belongs to somebody else, then confirm the router
+  // refuses it before it can reach the provider-match check.
+  const record = accounts.find(mockAccount.accountId);
+  const realOwner = record.ownerId;
+  record.ownerId = 'a-different-user';
+  await expectError('an account owned by someone else is refused', CODES.OWNERSHIP, () =>
+    router.execute('REDDIT_SUBMIT_POST', {
+      connectedAccountId: mockAccount.accountId,
+      arguments: { subreddit: 'test', title: 'hi' }
+    })
+  );
+  record.ownerId = realOwner;
+
+  const mismatch = await router
+    .execute('REDDIT_SUBMIT_POST', {
+      connectedAccountId: mockAccount.accountId,
+      arguments: { subreddit: 'test', title: 'hi' }
+    })
+    .then(() => null)
+    .catch((error) => error);
+  check('a tool cannot run on another provider’s account', mismatch?.code === CODES.PROVIDER_ERROR);
+
+  const dry = await router.check('REDDIT_SUBMIT_POST', {
+    connectedAccountId: mockAccount.accountId,
+    arguments: { subreddit: 'test', title: 'hi' }
+  });
+  check('a dry run reports the mismatch without acting', dry.ok === false);
+
+  const actions = router.availableActions();
+  const igSendAction = actions.find((action) => action.slug === 'INSTAGRAM_PUBLISH_MEDIA');
+  check('unavailable actions explain themselves', igSendAction && !igSendAction.available && igSendAction.reason);
+  check(
+    'actions never carry credentials',
+    !JSON.stringify(actions).includes('token')
+  );
+
+  await integrations.disconnect(mockAccount.accountId);
 
   console.log('\n--- rate limiting ---');
 

@@ -10,11 +10,12 @@ const accounts = require('./core/accounts');
 const oauth = require('./core/oauth');
 const vault = require('./core/vault');
 const audit = require('./core/audit');
+const tools = require('./core/tools');
+const router = require('./core/router');
 const { IntegrationError, CODES } = require('./core/errors');
 const { STATUS: CAP_STATUS } = require('./core/capabilities');
 
 // Registered in the order they should appear in the UI.
-require('./providers/composio');
 require('./providers/x');
 require('./providers/instagram');
 require('./providers/reddit');
@@ -194,6 +195,12 @@ module.exports = {
   audit,
   vault,
   oauth,
+  tools,
+  // The AI reaches platforms through this and nothing else.
+  execute: router.execute,
+  checkAction: router.check,
+  availableActions: router.availableActions,
+  toolCatalogue: tools.catalogue,
   CAP_STATUS,
   setCallbackPort,
   overview,
