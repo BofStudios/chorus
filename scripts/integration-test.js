@@ -107,6 +107,46 @@ async function expectError(name, code, fn) {
   const resolved = registry.require('reddit').capabilitiesFor(scopeless);
   check('missing scope is reported as such', resolved.sendMessages.status === STATUS.MISSING_SCOPE);
 
+  console.log('\n--- the channels that do work ---');
+
+  const reddit = registry.require('reddit');
+  check('Reddit can post', reddit.declaredCapabilities().post.status === STATUS.SUPPORTED);
+  check('Reddit can comment', reddit.declaredCapabilities().comments.status === STATUS.SUPPORTED);
+  check('Reddit requests the submit scope', reddit.oauth.scopes.includes('submit'));
+
+  check(
+    'Instagram can publish with a Professional account',
+    instagram.declaredCapabilities().post.status === STATUS.CONDITIONAL
+  );
+  check(
+    'Instagram can manage comments',
+    instagram.declaredCapabilities().comments.status === STATUS.CONDITIONAL
+  );
+  check(
+    'Instagram requests the publishing scope',
+    instagram.oauth.scopes.includes('instagram_business_content_publish')
+  );
+
+  await expectError('Reddit post without submit scope is denied', CODES.PERMISSION_DENIED, () =>
+    reddit.post({ id: 'nope', scopes: ['identity'] }, { subreddit: 'test', title: 'hi' })
+  );
+  await expectError('Instagram post without publish scope is denied', CODES.PERMISSION_DENIED, () =>
+    instagram.post({ id: 'nope', scopes: ['instagram_business_basic'] }, { imageUrl: 'https://x/y.jpg' })
+  );
+
+  console.log('\n--- composio broker ---');
+
+  const composio = registry.require('composio');
+  check('Composio is registered', Boolean(composio));
+  check('Composio needs only an API key', composio.credentials.required.join() === 'COMPOSIO_API_KEY');
+  check(
+    'Composio is honest that capabilities depend on the toolkit',
+    composio.declaredCapabilities().sendMessages.reason.includes('toolkit')
+  );
+  await expectError('Composio without a key fails clearly', CODES.NOT_CONFIGURED, () =>
+    composio.listToolkits()
+  );
+
   console.log('\n--- OAuth state ---');
 
   const notConfigured = registry.require('x');

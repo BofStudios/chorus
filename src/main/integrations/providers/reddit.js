@@ -10,6 +10,7 @@
 
 const { SocialProvider, CAPABILITY } = require('../core/provider');
 const { supported, conditional } = require('../core/capabilities');
+const audit = require('../core/audit');
 const registry = require('../core/registry');
 const { IntegrationError, CODES, fromResponse } = require('../core/errors');
 
@@ -24,7 +25,7 @@ class RedditProvider extends SocialProvider {
       docs: 'https://www.reddit.com/dev/api',
       sdk: 'https://github.com/reddit-archive/reddit/wiki/OAuth2',
       notes:
-        'Reddit allows private messages through its API, but its rules prohibit unsolicited bulk messaging and enforce that with shadowbans. Chorus caps this connection at a few messages an hour on purpose. Replying in a relevant thread almost always works better than a PM.',
+        'The channel that works on Reddit is posting and commenting where your project is on topic — not private messages. Chorus supports both, but PMs are capped at a couple an hour because Reddit shadowbans unsolicited bulk messaging. Read each subreddit’s self-promotion rules before you post; most require you to be a participant, not an advertiser.',
       credentials: {
         required: ['REDDIT_CLIENT_ID'],
         optional: ['REDDIT_CLIENT_SECRET'],
@@ -36,7 +37,7 @@ class RedditProvider extends SocialProvider {
         tokenUrl: 'https://www.reddit.com/api/v1/access_token',
         revokeUrl: 'https://www.reddit.com/api/v1/revoke_token',
         clientAuth: 'basic',
-        scopes: ['identity', 'read', 'privatemessages'],
+        scopes: ['identity', 'read', 'privatemessages', 'submit', 'edit'],
         scopeSeparator: ' ',
         extraAuthParams: { duration: 'permanent' }
       },
@@ -44,9 +45,12 @@ class RedditProvider extends SocialProvider {
         perMinute: 30,
         burst: 5,
         // Reddit's own guidance is 60 requests/minute; messaging is throttled
-        // far harder than that by the anti-spam system.
+        // far harder than that by the anti-spam system. Posting has its own
+        // cadence — too many submissions in a row also trips the spam filter.
         perAction: {
           sendMessages: { perMinute: 2, burst: 1 },
+          post: { perMinute: 1, burst: 1 },
+          comments: { perMinute: 3, burst: 2 },
           search: { perMinute: 10, burst: 3 }
         }
       },
@@ -54,8 +58,19 @@ class RedditProvider extends SocialProvider {
         [CAPABILITY.PROFILE]: supported({ scopes: ['identity'] }),
         [CAPABILITY.SEARCH]: supported({ scopes: ['read'] }),
         [CAPABILITY.READ_MESSAGES]: supported({ scopes: ['privatemessages'] }),
+
+        // The channel that actually works for reaching people on Reddit.
+        [CAPABILITY.POST]: supported({
+          scopes: ['submit'],
+          docs: 'https://www.reddit.com/dev/api#POST_api_submit'
+        }),
+        [CAPABILITY.COMMENTS]: supported({
+          scopes: ['submit'],
+          docs: 'https://www.reddit.com/dev/api#POST_api_comment'
+        }),
+
         [CAPABILITY.SEND_MESSAGES]: conditional(
-          'Allowed by the API, but Reddit’s rules forbid unsolicited bulk messages. Chorus limits this to a couple of messages an hour and will not batch them.',
+          'Allowed by the API, but Reddit’s rules forbid unsolicited bulk messages. Chorus limits this to a couple of messages an hour and will not batch them. Posting in a relevant subreddit reaches more people and does not risk the account.',
           { scopes: ['privatemessages'], docs: 'https://support.reddithelp.com/hc/en-us/articles/360043504051' }
         )
       }
@@ -203,6 +218,113 @@ class RedditProvider extends SocialProvider {
     }
 
     return { providerMessageId: '', accepted: true };
+  }
+
+  /**
+   * Submit to a subreddit. Reddit answers 200 with the rejection inside the
+   * body, so the same unwrapping the PM path needs applies here — and the
+   * failures that matter (subreddit rules, karma gates, spam filter) all arrive
+   * that way rather than as an HTTP error.
+   */
+  async _post(account, { subreddit, title, text, url }) {
+    const { accessToken } = await require('../index').authorise(account.id);
+
+    if (!subreddit) {
+      throw new IntegrationError(CODES.PROVIDER_ERROR, {
+        provider: this.id,
+        message: 'A subreddit is required to post.'
+      });
+    }
+    if (!title || title.length > 300) {
+      throw new IntegrationError(CODES.PROVIDER_ERROR, {
+        provider: this.id,
+        message: 'Reddit titles are required and cannot exceed 300 characters.'
+      });
+    }
+
+    const result = await this.#call(accessToken, '/api/submit', {
+      method: 'POST',
+      form: {
+        api_type: 'json',
+        sr: String(subreddit).replace(/^\/?r\//, ''),
+        kind: url ? 'link' : 'self',
+        title,
+        ...(url ? { url } : { text: text || '' }),
+        // Reddit rejects duplicate links; saying so plainly beats a silent no-op.
+        resubmit: 'false',
+        sendreplies: 'true'
+      }
+    });
+
+    this.#assertAccepted(result, 'post');
+    const data = result.json?.data || {};
+    audit.record(audit.EVENTS.MESSAGE_SENT, {
+      provider: this.id,
+      accountId: account.id,
+      channel: 'post',
+      subreddit
+    });
+
+    return { providerMessageId: data.name || data.id || '', url: data.url || '' };
+  }
+
+  /** Reply to a post or comment by fullname, e.g. t3_abc123 or t1_def456. */
+  async _comment(account, { parentId, text }) {
+    const { accessToken } = await require('../index').authorise(account.id);
+
+    if (!/^t[135]_[a-z0-9]+$/i.test(String(parentId || ''))) {
+      throw new IntegrationError(CODES.INVALID_RECIPIENT, {
+        provider: this.id,
+        message: 'A Reddit reply needs the parent’s fullname, like t3_abc123 for a post or t1_abc123 for a comment.'
+      });
+    }
+
+    const result = await this.#call(accessToken, '/api/comment', {
+      method: 'POST',
+      form: { api_type: 'json', thing_id: parentId, text }
+    });
+
+    this.#assertAccepted(result, 'comment');
+    const thing = result.json?.data?.things?.[0]?.data || {};
+    audit.record(audit.EVENTS.MESSAGE_SENT, {
+      provider: this.id,
+      accountId: account.id,
+      channel: 'comment',
+      parentId
+    });
+
+    return { providerMessageId: thing.name || '', url: thing.permalink ? `https://reddit.com${thing.permalink}` : '' };
+  }
+
+  /** Reddit's 200-with-errors convention, translated into real failures. */
+  #assertAccepted(result, what) {
+    const errors = result.json?.errors || [];
+    if (!errors.length) return;
+
+    const [code, explanation] = errors[0];
+    const message = String(explanation || code);
+
+    if (/RATELIMIT/i.test(code)) {
+      const error = new IntegrationError(CODES.RATE_LIMITED, {
+        provider: this.id,
+        message: `Reddit is throttling this account: ${message}`,
+        retryAfterMs: 10 * 60000
+      });
+      this.limiter.penalise(error.retryAfterMs);
+      throw error;
+    }
+    if (/SUBREDDIT_NOEXIST|SUBREDDIT_NOTALLOWED|USER_REQUIRED/i.test(code)) {
+      throw new IntegrationError(CODES.PERMISSION_DENIED, {
+        provider: this.id,
+        message: `Reddit refused the ${what}: ${message}. Many subreddits require minimum karma, account age, or forbid self-promotion outright.`,
+        detail: errors
+      });
+    }
+    throw new IntegrationError(CODES.PROVIDER_ERROR, {
+      provider: this.id,
+      message: `Reddit rejected the ${what}: ${message}`,
+      detail: errors
+    });
   }
 }
 

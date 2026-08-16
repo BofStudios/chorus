@@ -140,6 +140,22 @@ class SocialProvider {
     return this.limiter.run('sendMessages', () => this._sendMessage(account, payload), { maxWaitMs: 0 });
   }
 
+  /**
+   * Publish to the account's own audience. This is the channel that actually
+   * works on platforms whose DM APIs are closed — you are posting as yourself,
+   * to people who chose to follow or subscribe.
+   */
+  async post(account, payload) {
+    this.assertCapability(CAPABILITY.POST, account);
+    return this.limiter.run('post', () => this._post(account, payload), { maxWaitMs: 0 });
+  }
+
+  /** Reply to a comment or thread the account can already see. */
+  async comment(account, payload) {
+    this.assertCapability(CAPABILITY.COMMENTS, account);
+    return this.limiter.run('comments', () => this._comment(account, payload), { maxWaitMs: 0 });
+  }
+
   async getUsage(account) {
     return this._getUsage ? this._getUsage(account) : { known: false };
   }
@@ -161,6 +177,12 @@ class SocialProvider {
   }
   async _sendMessage() {
     throw this.#notImplemented('message sending');
+  }
+  async _post() {
+    throw this.#notImplemented('publishing');
+  }
+  async _comment() {
+    throw this.#notImplemented('commenting');
   }
 
   #notImplemented(what) {
