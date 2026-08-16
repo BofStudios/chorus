@@ -88,10 +88,15 @@ class InstagramProvider extends SocialProvider {
           }
         ),
 
-        // The important one. Not "hard", not "needs review" — not offered.
-        [CAPABILITY.SEND_MESSAGES]: unsupported(
-          'Instagram only allows replying to someone who messaged you first, within 24 hours. There is no API for messaging a stranger, so outreach campaigns cannot run on Instagram.',
+        // Precisely: the send endpoint exists, but Meta enforces that it is a
+        // reply. A conversation the other person started, answered inside 24
+        // hours. Sending to anyone else is refused server-side, which is why
+        // outreach campaigns still cannot target Instagram — not because the
+        // call is missing, but because Meta rejects it.
+        [CAPABILITY.SEND_MESSAGES]: conditional(
+          'Reply-only. Instagram accepts a message only inside a 24-hour window, in a conversation the other person started. Messages to anyone who has not written to you first are rejected by Meta, so this cannot be used for outreach.',
           {
+            scopes: ['instagram_business_manage_messages'],
             docs: 'https://developers.facebook.com/docs/instagram-platform/instagram-api-with-instagram-login/messaging-api'
           }
         )

@@ -16,6 +16,7 @@ const { IntegrationError, CODES } = require('./core/errors');
 const { STATUS: CAP_STATUS } = require('./core/capabilities');
 
 // Registered in the order they should appear in the UI.
+require('./providers/composio');
 require('./providers/x');
 require('./providers/instagram');
 require('./providers/reddit');

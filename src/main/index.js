@@ -1,4 +1,5 @@
 const path = require('path');
+require('./env').load();
 const { app, BrowserWindow, shell, Menu } = require('electron');
 const ipc = require('./ipc');
 const bridge = require('./bridge');

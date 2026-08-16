@@ -64,8 +64,9 @@ async function expectError(name, code, fn) {
 
   const instagram = registry.require('instagram');
   const igSend = instagram.declaredCapabilities().sendMessages;
-  check('Instagram declares sending unsupported', igSend.status === STATUS.UNSUPPORTED);
-  check('Instagram explains why', igSend.reason.length > 40);
+  check('Instagram declares sending reply-only, not open', igSend.status === STATUS.CONDITIONAL);
+  check('Instagram names the 24-hour window', igSend.reason.includes('24-hour'));
+  check('Instagram says outreach is impossible', igSend.reason.includes('outreach'));
 
   const linkedin = registry.require('linkedin');
   check(
@@ -88,7 +89,7 @@ async function expectError(name, code, fn) {
   console.log('\n--- unsupported capabilities are refused before any request ---');
 
   const fakeAccount = { id: 'nope', scopes: ['instagram_business_basic'] };
-  await expectError('Instagram sendMessage is rejected', CODES.CAPABILITY_UNSUPPORTED, () =>
+  await expectError('Instagram send without the messaging scope is denied', CODES.PERMISSION_DENIED, () =>
     instagram.sendMessage(fakeAccount, { recipient: 'someone', body: 'hi' })
   );
   await expectError('Instagram search is rejected', CODES.CAPABILITY_UNSUPPORTED, () =>

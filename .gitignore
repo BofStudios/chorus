@@ -17,3 +17,7 @@ data.json
 Thumbs.db
 .vscode/
 .idea/
+
+# local secrets
+.env
+.env.local
