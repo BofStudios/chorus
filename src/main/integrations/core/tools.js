@@ -292,4 +292,228 @@ define({
   run: (provider, account, args) => provider.getProfile(account, args)
 });
 
-module.exports = { define, get, list, catalogue, validate, CAPABILITY };
+// --- tools routed through Composio ---------------------------------------
+//
+// These reach platforms Chorus has no direct adapter for. Every slug below was
+// read off Composio's live tool list, not guessed. Where a platform is missing
+// from this section it is because Composio exposes no tool for it — Discord, for
+// instance, has 23 tools and not one of them sends a message.
+
+/**
+ * A tool whose work happens inside a Composio connection. Beyond the router's
+ * usual gates, this checks the connected account is for the right toolkit: a
+ * Gmail connection must not be able to run a Slack tool just because both
+ * arrived through the same broker.
+ */
+function defineComposio({ slug, toolkit, composioTool, capability, summary, input, mapArgs, caveat }) {
+  return define({
+    slug,
+    provider: 'composio',
+    capability,
+    summary: caveat ? `${summary} ${caveat}` : summary,
+    input,
+    async run(provider, account, args) {
+      const connectedToolkit = account.metadata?.toolkit || '';
+      if (connectedToolkit && connectedToolkit !== toolkit) {
+        throw new IntegrationError(CODES.PROVIDER_ERROR, {
+          provider: 'composio',
+          message: `${slug} needs a ${toolkit} connection, but that account is connected to ${connectedToolkit}.`
+        });
+      }
+      const result = await provider.executeTool(composioTool, {
+        connectedAccountId: account.metadata?.composioAccountId || account.providerAccountId,
+        arguments: mapArgs ? mapArgs(args) : args
+      });
+      return {
+        providerMessageId: result?.id || result?.message_id || result?.ts || '',
+        via: 'composio',
+        tool: composioTool,
+        result
+      };
+    }
+  });
+}
+
+defineComposio({
+  slug: 'COMPOSIO_GMAIL_SEND_EMAIL',
+  toolkit: 'gmail',
+  composioTool: 'GMAIL_SEND_EMAIL',
+  capability: CAPABILITY.SEND_MESSAGES,
+  summary: 'Send an email through a Gmail account connected via Composio.',
+  input: {
+    to: { type: 'string', required: true, pattern: EMAIL, patternMessage: '"to" must be an email address', description: 'Recipient' },
+    subject: { type: 'string', required: true, max: 200, description: 'Subject' },
+    body: { type: 'string', required: true, max: 20000, description: 'Body text' }
+  },
+  mapArgs: (args) => ({ recipient_email: args.to, subject: args.subject, body: args.body })
+});
+
+defineComposio({
+  slug: 'COMPOSIO_SLACK_POST_MESSAGE',
+  toolkit: 'slack',
+  composioTool: 'SLACK_CHAT_POST_MESSAGE',
+  capability: CAPABILITY.SEND_MESSAGES,
+  summary: 'Post a message to a Slack channel or user.',
+  input: {
+    channel: { type: 'string', required: true, max: 100, description: 'Channel id, #name, or user id for a DM' },
+    text: { type: 'string', required: true, max: 40000, description: 'Message text' }
+  },
+  mapArgs: (args) => ({ channel: args.channel, text: args.text })
+});
+
+defineComposio({
+  slug: 'COMPOSIO_X_SEND_DM',
+  toolkit: 'twitter',
+  composioTool: 'TWITTER_SEND_A_NEW_MESSAGE_TO_A_USER',
+  capability: CAPABILITY.SEND_MESSAGES,
+  summary: 'Send a direct message on X through a Composio connection.',
+  caveat: 'Needs a paid X API tier; the free tier refuses DMs.',
+  input: {
+    participantId: { type: 'string', required: true, max: 40, description: 'Numeric X user id' },
+    text: { type: 'string', required: true, max: 10000, description: 'Message text' }
+  },
+  mapArgs: (args) => ({ participant_id: args.participantId, text: args.text })
+});
+
+defineComposio({
+  slug: 'COMPOSIO_WHATSAPP_SEND_MESSAGE',
+  toolkit: 'whatsapp',
+  composioTool: 'WHATSAPP_SEND_MESSAGE',
+  capability: CAPABILITY.SEND_MESSAGES,
+  summary: 'Send a WhatsApp Business message.',
+  caveat:
+    'Outside a 24-hour window opened by the recipient writing first, WhatsApp only accepts pre-approved template messages — free-form text to a stranger is rejected by Meta.',
+  input: {
+    to: {
+      type: 'string',
+      required: true,
+      max: 20,
+      pattern: /^\+?[0-9]{7,15}$/,
+      patternMessage: '"to" must be a phone number in international format',
+      description: 'Recipient phone number'
+    },
+    text: { type: 'string', required: true, max: 4096, description: 'Message text' }
+  },
+  mapArgs: (args) => ({ to: args.to, text: args.text })
+});
+
+// --- getting paid ---------------------------------------------------------
+//
+// Stripe has no single "send an invoice" call. A payable invoice is four steps:
+// a customer, a line item, the invoice itself, then finalising it — and only
+// after finalising does Stripe email it and expose a hosted page to pay on.
+// Chaining them here means one tool call produces one payable invoice, and a
+// failure halfway through reports which step failed instead of leaving a draft
+// nobody knows about.
+//
+// Note what this does and does not touch: it creates a record in *your* Stripe
+// account and asks Stripe to bill someone. No card number passes through
+// Chorus, and nothing here can move money on its own — the recipient pays
+// Stripe directly, on Stripe's page.
+
+define({
+  slug: 'STRIPE_ISSUE_INVOICE',
+  provider: 'composio',
+  capability: CAPABILITY.SEND_MESSAGES,
+  summary:
+    'Issue a payable invoice from your connected Stripe account and return its hosted payment page. Stripe emails the customer.',
+  input: {
+    email: {
+      type: 'string',
+      required: true,
+      pattern: EMAIL,
+      patternMessage: '"email" must be an email address',
+      description: 'Who to bill'
+    },
+    name: { type: 'string', required: false, max: 200, description: 'Customer name' },
+    description: { type: 'string', required: true, max: 300, description: 'What the invoice is for' },
+    amount: { type: 'number', required: true, description: 'Amount in the smallest currency unit, e.g. 5000 = 50.00' },
+    currency: { type: 'string', required: false, max: 3, default: 'usd', description: 'ISO currency code' },
+    daysUntilDue: { type: 'number', required: false, default: 7, description: 'Payment terms in days' }
+  },
+  async run(provider, account, args) {
+    const connectedAccountId = account.metadata?.composioAccountId || account.providerAccountId;
+    const toolkit = account.metadata?.toolkit || '';
+    if (toolkit && toolkit !== 'stripe') {
+      throw new IntegrationError(CODES.PROVIDER_ERROR, {
+        provider: 'composio',
+        message: `Issuing an invoice needs a Stripe connection, but that account is connected to ${toolkit}.`
+      });
+    }
+
+    const call = (tool, args_) =>
+      provider.executeTool(tool, { connectedAccountId, arguments: args_ }).catch((error) => {
+        throw new IntegrationError(CODES.PROVIDER_ERROR, {
+          provider: 'composio',
+          message: `Invoice failed at ${tool.replace('STRIPE_', '').toLowerCase()}: ${error.message}`,
+          detail: error.detail
+        });
+      });
+
+    // Amounts are integers in the smallest unit; a float here silently becomes
+    // the wrong price, so it is rejected rather than rounded.
+    if (!Number.isInteger(args.amount) || args.amount <= 0) {
+      throw new IntegrationError(CODES.PROVIDER_ERROR, {
+        provider: 'composio',
+        message: 'The amount must be a whole number in the smallest currency unit — 5000 for 50.00, not 50.'
+      });
+    }
+
+    const currency = (args.currency || 'usd').toLowerCase();
+
+    const customer = await call('STRIPE_CREATE_CUSTOMER', {
+      email: args.email,
+      ...(args.name ? { name: args.name } : {})
+    });
+    const customerId = customer?.id;
+    if (!customerId) {
+      throw new IntegrationError(CODES.PROVIDER_ERROR, {
+        provider: 'composio',
+        message: 'Stripe did not return a customer id, so no invoice was created.'
+      });
+    }
+
+    // The invoice is created before the item is attached only when the item
+    // names the invoice; creating the item first lets Stripe attach it to the
+    // next draft for this customer, which is the documented order.
+    await call('STRIPE_CREATE_INVOICE_ITEM', {
+      customer: customerId,
+      amount: args.amount,
+      currency,
+      description: args.description
+    });
+
+    const invoice = await call('STRIPE_CREATE_INVOICE', {
+      customer: customerId,
+      collection_method: 'send_invoice',
+      days_until_due: args.daysUntilDue ?? 7,
+      description: args.description
+    });
+    const invoiceId = invoice?.id;
+    if (!invoiceId) {
+      throw new IntegrationError(CODES.PROVIDER_ERROR, {
+        provider: 'composio',
+        message: 'Stripe created no invoice id. Nothing was billed.'
+      });
+    }
+
+    // Until it is finalised an invoice is a draft: not emailed, not payable.
+    const finalised = await call('STRIPE_FINALIZE_INVOICE', { invoice: invoiceId });
+
+    return {
+      providerMessageId: invoiceId,
+      via: 'composio',
+      tool: 'STRIPE_ISSUE_INVOICE',
+      customerId,
+      invoiceId,
+      status: finalised?.status || invoice?.status || 'unknown',
+      amountDue: finalised?.amount_due ?? args.amount,
+      currency,
+      // The link to put in the outreach message.
+      hostedInvoiceUrl: finalised?.hosted_invoice_url || invoice?.hosted_invoice_url || '',
+      invoicePdf: finalised?.invoice_pdf || ''
+    };
+  }
+});
+
+module.exports = { define, defineComposio, get, list, catalogue, validate, CAPABILITY };
