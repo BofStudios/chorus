@@ -320,6 +320,72 @@ async function expectError(name, code, fn) {
 
   await integrations.disconnect(mockAccount.accountId);
 
+  console.log('\n--- the outreach queue ---');
+
+  const queue = require('../src/main/outreach/queue');
+  const campaigns = require('../src/main/outreach/campaigns');
+  const worker = require('../src/main/outreach/worker');
+
+  const mockAcct = registry.require('mock').beginConnection();
+  const camp = campaigns.create({ name: 'test', product: 'Chorus' });
+
+  const msg = queue.create({
+    campaignId: camp.id,
+    prospect: { username: '@someone' },
+    tool: 'MOCK_SEND',
+    connectedAccountId: mockAcct.accountId,
+    args: { to: '@someone', body: 'hello' }
+  });
+  check('a generated message starts as a draft', msg.state === queue.STATE.DRAFT);
+
+  try {
+    queue.enqueue(msg.id);
+    check('a draft cannot be queued without approval', false);
+  } catch (error) {
+    check('a draft cannot be queued without approval', error.message.includes('cannot go from draft'));
+  }
+
+  queue.approve(msg.id);
+  check('approval moves it to approved', queue.find(msg.id).state === queue.STATE.APPROVED);
+
+  queue.edit(msg.id, { body: 'edited' });
+  check('editing an approved message returns it to draft', queue.find(msg.id).state === queue.STATE.DRAFT);
+
+  queue.approve(msg.id);
+  queue.enqueue(msg.id);
+  check('an approved message can be queued', queue.find(msg.id).state === queue.STATE.QUEUED);
+
+  const pausedClaim = queue.claimNext({ campaignStates: { [camp.id]: 'paused' } });
+  check('the worker will not claim work from a paused campaign', pausedClaim === null);
+
+  campaigns.start(camp.id);
+  const claimed = queue.claimNext({ campaignStates: campaigns.statusMap() });
+  check('the worker claims work from a running campaign', claimed && claimed.id === msg.id);
+  check('claiming counts an attempt', claimed.attemptCount === 1);
+
+  queue.markSent(msg.id, { providerMessageId: 'mock-1' });
+  check('a sent message is terminal', queue.find(msg.id).state === queue.STATE.SENT);
+  try {
+    queue.approve(msg.id);
+    check('a sent message cannot be re-approved', false);
+  } catch {
+    check('a sent message cannot be re-approved', true);
+  }
+  check('the contact ledger recorded the send', db.ledgerHas('x:@someone'));
+  check('the worker is idle until started', worker.status().running === false);
+
+  console.log('\n--- github promotion readiness ---');
+
+  const github = registry.require('github');
+  check(
+    'GitHub has no send-message capability',
+    github.declaredCapabilities().sendMessages.status === STATUS.UNSUPPORTED
+  );
+  check('GitHub can comment', github.declaredCapabilities().comments.status === STATUS.CONDITIONAL);
+  check('GitHub requests public_repo', github.oauth.scopes.includes('public_repo'));
+
+  await integrations.disconnect(mockAcct.accountId);
+
   console.log('\n--- rate limiting ---');
 
   const limiter = registry.require('reddit').limiter;
