@@ -59,10 +59,19 @@ function reasonText(reason) {
   return 'Chorus is not running. Start the desktop app and try again.';
 }
 
+/** Ask Chorus to judge a GitHub account's repositories. */
+async function analyseRepos(login) {
+  const state = await connect();
+  if (!state.connected) throw new Error(reasonText(state.reason));
+  const { token } = await config();
+  return request(state.port, '/repos/analyse', { token, method: 'POST', body: { login } });
+}
+
 chrome.runtime.onMessage.addListener((message, _sender, respond) => {
   const run = async () => {
     if (message.type === 'connect') return connect();
     if (message.type === 'send') return sendCandidate(message.payload);
+    if (message.type === 'analyse') return analyseRepos(message.login);
     if (message.type === 'pair') {
       await chrome.storage.local.set({ token: message.token.trim() });
       return connect();

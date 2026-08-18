@@ -185,6 +185,57 @@ async function userRepos(login, { limit = 8 } = {}) {
   }
 }
 
+/**
+ * Everything needed to judge whether someone's repositories are worth
+ * promoting. Listing public repositories needs no permission, so this works
+ * with the research token Chorus already has and needs no OAuth app.
+ *
+ * The README size costs one request per repo, so it is only fetched for the
+ * handful that could plausibly clear the bar.
+ */
+async function reposForReadiness(login, { limit = 30, withReadme = 8 } = {}) {
+  const data = await get(`/users/${login}/repos`, {
+    query: { sort: 'pushed', direction: 'desc', per_page: Math.min(limit, 100), type: 'owner' }
+  });
+  if (!Array.isArray(data)) return [];
+
+  const repos = data
+    .filter((repo) => !repo.fork && !repo.archived && !repo.private)
+    .map((repo) => ({
+      name: repo.name,
+      fullName: repo.full_name,
+      description: repo.description || '',
+      language: repo.language || '',
+      topics: repo.topics || [],
+      stars: repo.stargazers_count,
+      forks: repo.forks_count,
+      openIssues: repo.open_issues_count,
+      pushedAt: repo.pushed_at,
+      url: repo.html_url,
+      homepage: repo.homepage || '',
+      licence: repo.license?.spdx_id || '',
+      // null means "not checked", which the scorer treats as a pass rather
+      // than punishing a repo for a request we chose not to make.
+      readmeBytes: null
+    }));
+
+  const candidates = repos.slice(0, withReadme);
+  await Promise.all(
+    candidates.map(async (repo) => {
+      const [owner, name] = repo.fullName.split('/');
+      try {
+        const meta = await get(`/repos/${owner}/${name}/readme`);
+        repo.readmeBytes = meta?.size ?? null;
+      } catch {
+        // No README at all is the strongest possible signal of not-ready.
+        repo.readmeBytes = 0;
+      }
+    })
+  );
+
+  return repos;
+}
+
 async function tokenStatus() {
   const token = getStore().getSecret('githubToken');
   if (!token) return { authenticated: false, limit: 60 };
@@ -214,5 +265,6 @@ module.exports = {
   searchIssueAuthors,
   userProfile,
   userRepos,
+  reposForReadiness,
   tokenStatus
 };

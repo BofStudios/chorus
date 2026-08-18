@@ -43,3 +43,100 @@
   border-color: #4a2626;
   color: #f87171;
 }
+
+/* Secondary action — sits above the primary button on profile pages. */
+.chorus-btn.chorus-secondary {
+  bottom: 72px;
+  background: #0d1016;
+  color: #9aa2b1;
+  font-weight: 550;
+}
+
+.chorus-btn.chorus-secondary:hover:not(:disabled) {
+  color: #e4eaf2;
+}
+
+/* Verdict panel */
+.chorus-panel {
+  position: fixed;
+  right: 20px;
+  bottom: 124px;
+  z-index: 2147483000;
+  width: 340px;
+  max-height: 60vh;
+  overflow-y: auto;
+  padding: 16px 18px 18px;
+  border: 1px solid #272b36;
+  border-radius: 12px;
+  background: #0b0d12;
+  color: #e4eaf2;
+  font: 13px/1.5 "Segoe UI", system-ui, sans-serif;
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.6);
+}
+
+.chorus-panel-close {
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  background: none;
+  border: 0;
+  color: #656d7d;
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 2px 6px;
+}
+
+.chorus-panel-close:hover {
+  color: #e4eaf2;
+}
+
+.chorus-panel-title {
+  font-weight: 640;
+  margin-bottom: 6px;
+  padding-right: 20px;
+}
+
+.chorus-panel-summary {
+  color: #9aa2b1;
+  font-size: 12.5px;
+  margin-bottom: 14px;
+}
+
+.chorus-repo {
+  border-left: 2px solid #272b36;
+  padding: 7px 0 7px 10px;
+  margin-bottom: 8px;
+}
+
+.chorus-repo.ok { border-left-color: #3ddc91; }
+.chorus-repo.warn { border-left-color: #f5b95c; }
+.chorus-repo.bad { border-left-color: #ff6b6b; }
+
+.chorus-repo-head {
+  display: flex;
+  align-items: baseline;
+  gap: 9px;
+  font-weight: 560;
+}
+
+.chorus-score {
+  color: #656d7d;
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+  min-width: 22px;
+}
+
+.chorus-blocker {
+  color: #9aa2b1;
+  font-size: 12px;
+  margin-top: 3px;
+}
+
+.chorus-panel-cta {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid #1c1f28;
+  color: #6690ff;
+  font-size: 12.5px;
+}

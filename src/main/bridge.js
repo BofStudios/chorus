@@ -3,6 +3,8 @@ const crypto = require('crypto');
 const { getStore } = require('./store');
 const db = require('./db');
 const integrations = require('./integrations');
+const github = require('./sources/github');
+const readiness = require('./outreach/readiness');
 
 // Local bridge for the Chrome extension.
 //
@@ -195,6 +197,30 @@ async function route(req, res) {
 
   if (url.pathname === '/watchlist' && req.method === 'GET') {
     return send(res, 200, { items: db.watchlist().slice(0, 50) });
+  }
+
+  // Judge someone's public repositories. Listing them needs no permission, so
+  // this works with the research token and needs no GitHub OAuth app — the
+  // extension only has to say whose profile you are looking at.
+  if (url.pathname === '/repos/analyse' && req.method === 'POST') {
+    const body = await readBody(req);
+    const login = String(body.login || '').trim();
+    if (!/^[\w-]{1,39}$/.test(login)) {
+      return send(res, 400, { error: 'That is not a valid GitHub username.' });
+    }
+
+    try {
+      const repos = await github.reposForReadiness(login, { limit: 30 });
+      const suggestion = readiness.suggest(repos);
+      return send(res, 200, { ok: true, login, ...suggestion });
+    } catch (error) {
+      return send(res, 502, {
+        error:
+          error.status === 404
+            ? `GitHub has no user called ${login}.`
+            : error.message || 'Could not read those repositories.'
+      });
+    }
   }
 
   return send(res, 404, { error: 'Unknown endpoint.' });
