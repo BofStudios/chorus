@@ -49,8 +49,12 @@ function toClient(account) {
   };
 }
 
+/** Only the signed-in user's accounts. Another user's are not listed at all. */
 function list() {
-  return all().map(toClient);
+  const owner = currentOwner();
+  return all()
+    .filter((account) => account.ownerId === owner)
+    .map(toClient);
 }
 
 function listRaw() {
@@ -73,7 +77,12 @@ function findByProviderAccount(provider, providerAccountId) {
  * The ownership gate. Anything that acts on an account must call this and use
  * the record it returns rather than one it looked up itself.
  */
-function requireOwned(id, owner = db.ownerId()) {
+function currentOwner() {
+  // Required lazily: auth loads db, and db must not load auth.
+  return require('../../auth').ownerId();
+}
+
+function requireOwned(id, owner = currentOwner()) {
   const account = find(id);
   if (!account) {
     throw new IntegrationError(CODES.NOT_CONNECTED, {
@@ -104,7 +113,7 @@ function upsert({
 
   const account = existing || {
     id: crypto.randomUUID(),
-    ownerId: db.ownerId(),
+    ownerId: currentOwner(),
     provider,
     providerAccountId,
     createdAt: now,

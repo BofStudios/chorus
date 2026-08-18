@@ -29,7 +29,8 @@
     "dist:portable": "electron-builder --win portable",
     "dist:mac": "electron-builder --mac",
     "test:integrations": "node scripts/integration-test.js",
-    "composio:check": "node scripts/composio-check.js"
+    "composio:check": "node scripts/composio-check.js",
+    "test:auth": "node scripts/auth-test.js"
   },
   "devDependencies": {
     "electron": "^33.2.1",

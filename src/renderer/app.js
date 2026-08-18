@@ -50,7 +50,9 @@ const state = {
   findings: [],
   openCard: null,
   assessed: {},
-  wizardStep: 0
+  wizardStep: 0,
+  user: null,
+  authMinPassword: 8
 };
 
 const content = document.getElementById('content');
@@ -1367,9 +1369,144 @@ api.watchlist.onChange(() => {
   else toast('Someone was added to your watchlist from the extension.');
 });
 
+// --- the sign-in gate -----------------------------------------------------
+//
+// Covers everything until answered. The password is sent straight to the main
+// process and never held here: the field is read once on submit and cleared.
+
+function renderGate({ mode, error = '', busy = false }) {
+  const signUp = mode === 'signup';
+  document.getElementById('gate')?.remove();
+
+  const gate = document.createElement('div');
+  gate.className = 'gate';
+  gate.id = 'gate';
+  gate.innerHTML = `
+    <form class="gate-card" id="gateForm" autocomplete="off">
+      <img class="gate-mark" src="logo.svg" alt="" />
+      <div class="gate-title">${signUp ? 'Create your account' : 'Welcome back'}</div>
+      <div class="gate-sub">
+        ${
+          signUp
+            ? 'A username and a password, kept on this computer. No email, no server, nothing to verify.'
+            : 'Sign in to reach your research, drafts and connected accounts.'
+        }
+      </div>
+
+      <label class="field">
+        <span>Username</span>
+        <input type="text" id="gateUser" autocomplete="username" spellcheck="false" required />
+      </label>
+
+      <label class="field">
+        <span>Password</span>
+        <input type="password" id="gatePass" autocomplete="${signUp ? 'new-password' : 'current-password'}" required />
+        ${signUp ? `<span class="hint">At least ${state.authMinPassword || 8} characters.</span>` : ''}
+      </label>
+
+      ${
+        signUp
+          ? `<label class="field">
+               <span>Confirm password</span>
+               <input type="password" id="gatePass2" autocomplete="new-password" required />
+             </label>`
+          : ''
+      }
+
+      <div class="gate-error" id="gateError">${esc(error)}</div>
+
+      <div class="gate-actions">
+        <button class="btn" type="submit" id="gateSubmit" ${busy ? 'disabled' : ''}>
+          ${busy ? 'Working…' : signUp ? 'Create account' : 'Sign in'}
+        </button>
+      </div>
+
+      <div class="gate-switch">
+        ${
+          signUp
+            ? 'Already have an account? <button type="button" id="gateSwitch">Sign in</button>'
+            : 'No account yet? <button type="button" id="gateSwitch">Create one</button>'
+        }
+      </div>
+
+      ${
+        signUp
+          ? `<div class="gate-note">
+               Your password is never stored — only a slow hash of it, salted for this account.
+               There is no recovery, because there is nowhere to send a reset to.
+             </div>`
+          : ''
+      }
+    </form>
+  `;
+
+  document.body.appendChild(gate);
+  document.getElementById('gateUser').focus();
+
+  document.getElementById('gateSwitch')?.addEventListener('click', () => {
+    renderGate({ mode: signUp ? 'login' : 'signup' });
+  });
+
+  document.getElementById('gateForm').addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const username = document.getElementById('gateUser').value;
+    const password = document.getElementById('gatePass').value;
+
+    if (signUp) {
+      const confirm = document.getElementById('gatePass2').value;
+      if (password !== confirm) {
+        renderGate({ mode, error: 'The two passwords are not the same.' });
+        return;
+      }
+    }
+
+    renderGate({ mode, busy: true });
+    const result = signUp ? await api.auth.signUp(username, password) : await api.auth.logIn(username, password);
+
+    if (!result.ok) {
+      renderGate({ mode, error: result.error });
+      return;
+    }
+
+    document.getElementById('gate')?.remove();
+    state.user = result.data;
+    await bootApp();
+  });
+}
+
+function paintUser() {
+  const foot = document.querySelector('.rail-foot');
+  if (!foot || !state.user) return;
+  document.getElementById('railUser')?.remove();
+
+  const row = document.createElement('div');
+  row.className = 'rail-user';
+  row.id = 'railUser';
+
+  const avatar = document.createElement('div');
+  avatar.className = 'rail-user-avatar';
+  avatar.textContent = (state.user.displayName || state.user.username).charAt(0).toUpperCase();
+
+  const name = document.createElement('span');
+  name.className = 'rail-label';
+  name.textContent = state.user.displayName || state.user.username;
+
+  const out = document.createElement('button');
+  out.className = 'rail-signout rail-label';
+  out.textContent = 'Sign out';
+  out.addEventListener('click', async () => {
+    await call(api.auth.logOut());
+    state.user = null;
+    renderGate({ mode: 'login' });
+  });
+
+  row.append(avatar, name, out);
+  foot.appendChild(row);
+}
+
 // --- boot -----------------------------------------------------------------
 
-(async () => {
+async function bootApp() {
   state.info = await call(api.info());
   state.settings = await call(api.settings.get());
   state.running = Boolean(await call(api.research.running(), { silent: true }));
@@ -1390,6 +1527,23 @@ api.watchlist.onChange(() => {
     setView(state.running ? 'targets' : 'new');
   }
 
+  paintUser();
   refreshSidebar();
-  setInterval(refreshSidebar, 20000);
+  if (!bootApp.polling) {
+    bootApp.polling = setInterval(refreshSidebar, 20000);
+  }
+}
+
+// Nothing is loaded until the gate is answered — not even the provider list.
+(async () => {
+  const auth = await call(api.auth.state(), { silent: true });
+  state.authMinPassword = auth?.minPassword || 8;
+
+  if (auth?.signedIn) {
+    state.user = auth.user;
+    await bootApp();
+    return;
+  }
+
+  renderGate({ mode: auth?.firstRun ? 'signup' : 'login' });
 })();

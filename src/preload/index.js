@@ -5,6 +5,19 @@ const invoke = (channel, ...args) => ipcRenderer.invoke(channel, ...args);
 contextBridge.exposeInMainWorld('chorus', {
   info: () => invoke('app:info'),
 
+  auth: {
+    state: () => invoke('auth:state'),
+    signUp: (username, password, displayName) => invoke('auth:signUp', username, password, displayName),
+    logIn: (username, password) => invoke('auth:logIn', username, password),
+    logOut: () => invoke('auth:logOut'),
+    changePassword: (current, next) => invoke('auth:changePassword', current, next),
+    onChange: (callback) => {
+      const listener = (_event, payload) => callback(payload);
+      ipcRenderer.on('auth:changed', listener);
+      return () => ipcRenderer.removeListener('auth:changed', listener);
+    }
+  },
+
   settings: {
     get: () => invoke('settings:get'),
     save: (patch) => invoke('settings:save', patch),

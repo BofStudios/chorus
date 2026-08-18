@@ -6,6 +6,7 @@ const research = require('./research');
 const db = require('./db');
 const http = require('./http');
 const bridge = require('./bridge');
+const auth = require('./auth');
 
 function handle(channel, fn) {
   ipcMain.handle(channel, async (_event, ...args) => {
@@ -24,6 +25,39 @@ function register(getWindow) {
     const win = getWindow();
     if (win && !win.isDestroyed()) win.webContents.send(channel, payload);
   };
+
+  // --- accounts -----------------------------------------------------------
+  // The password only ever travels main-ward. Nothing here returns it, and the
+  // renderer is never told whether a username exists.
+
+  handle('auth:state', () => ({
+    firstRun: auth.isFirstRun(),
+    signedIn: auth.isSignedIn(),
+    user: auth.currentUser(),
+    minPassword: auth.MIN_PASSWORD
+  }));
+
+  handle('auth:signUp', async (username, password, displayName) => {
+    const user = await auth.signUp({ username, password, displayName });
+    emit('auth:changed', { signedIn: true, user });
+    return user;
+  });
+
+  handle('auth:logIn', async (username, password) => {
+    const user = await auth.logIn({ username, password });
+    emit('auth:changed', { signedIn: true, user });
+    return user;
+  });
+
+  handle('auth:logOut', () => {
+    auth.logOut();
+    emit('auth:changed', { signedIn: false, user: null });
+    return true;
+  });
+
+  handle('auth:changePassword', (currentPassword, newPassword) =>
+    auth.changePassword({ currentPassword, newPassword })
+  );
 
   handle('app:info', () => ({
     version: app.getVersion(),
